@@ -14,6 +14,10 @@
 const float TILE_W = 256.0f;
 const float TILE_H = 128.0f;
 
+
+// ==========================================
+// ИГРОВЫЕ СТРУКТУРЫ (ID И UNION БАЗИС)
+// ==========================================
 typedef enum { ENT_PLAYER, ENT_BOT, ENT_TREE, ENT_COUNT } EntityType;
 typedef enum { TILE_TRAVA, TILE_ROMASHKA } TileState;
 
@@ -63,8 +67,11 @@ typedef struct {
     float scale;
 } RenderItem;
 
+// ==========================================
+// ГЛОБАЛЬНЫЕ СИСТЕМЫ
+// ==========================================
 Chunk world[CHUNKS_PER_SIDE][CHUNKS_PER_SIDE];
-Vector(Entity) entityPool = NULL; 
+Vector(Entity) entityPool = NULL;  // Прямой массив структур (Cash-friendly!)
 Vector(RenderItem) renderQueue = NULL; 
 
 Texture2D globalAtlas;
@@ -73,15 +80,22 @@ EntityConfig entityConfigs[ENT_COUNT];
 Camera2D camera = { 0 };
 uint32_t playerId = 0;
 
+// Честная статистика для HUD
 int debugCheckedChunks = 0;
 int debugRenderedTiles = 0;
 int debugCheckedEntities = 0;
 int debugRenderedEntities = 0;
 
+// ==========================================
+// МАТЕМАТИКА
+// ==========================================
 Vector2 GridToIso(Vector2 gridPos) { return (Vector2){ (gridPos.x - gridPos.y) * (TILE_W / 2.0f), (gridPos.x + gridPos.y) * (TILE_H / 2.0f) }; }
 Vector2 IsoToGrid(Vector2 isoPos) { return (Vector2){ (isoPos.x / (TILE_W / 2.0f) + isoPos.y / (TILE_H / 2.0f)) / 2.0f, (isoPos.y / (TILE_H / 2.0f) - isoPos.x / (TILE_W / 2.0f)) / 2.0f }; }
 Rectangle GetAtlasRect(uint32_t imageId) { return atlasRects[imageId]; }
 
+// ==========================================
+// МЕНЕДЖМЕНТ СУЩНОСТЕЙ ПО ID
+// ==========================================
 void UpdateEntityChunkPosition(uint32_t id) {
     Entity* ent = &entityPool[id]; // Безопасное получение указателя на кадр
     
@@ -110,6 +124,7 @@ uint32_t spawn_entity(EntityType type, float x, float y) {
     uint32_t id = 0;
     bool foundSlot = false;
 
+    // 1. Ищем мертвый слот для переиспользования (чтобы индексы не съезжали)
     for (size_t i = 0; i < vec_size(entityPool); i++) {
         if (!entityPool[i].active) {
             id = i;
@@ -118,6 +133,7 @@ uint32_t spawn_entity(EntityType type, float x, float y) {
         }
     }
 
+    // 2. Инициализируем данные
     Entity ent = {0};
     ent.id = foundSlot ? id : vec_size(entityPool);
     ent.type = type;
@@ -126,11 +142,13 @@ uint32_t spawn_entity(EntityType type, float x, float y) {
     ent.chunkX = -1;
     ent.chunkY = -1;
 
+    // Специфичные данные инициализируем через юнион
     if (entityConfigs[type].isLiving) {
         ent.as.living.targetPos = ent.pos;
         ent.as.living.timer = 0;
     }
 
+    // 3. Сохраняем в пул
     if (foundSlot) entityPool[id] = ent;
     else { vec_push(entityPool, ent); id = ent.id; }
 
@@ -194,10 +212,13 @@ void UpdateEntityLogic(uint32_t id, float dt) {
     }
 }
 
+// ==========================================
+// ГЛАВНЫЙ ЦИКЛ
+// ==========================================
 int main(void) {
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_WINDOW_MAXIMIZED);
     InitWindow(1280, 720, "shararam+");
-    SetTargetFPS(0);
+    SetTargetFPS(60);
 
     InitGameData();
     LoadTextureAtlas();
@@ -208,8 +229,8 @@ int main(void) {
 
     playerId = spawn_entity(ENT_PLAYER, MAP_SIZE / 2.0f, MAP_SIZE / 2.0f);
     
-    for (int i = 0; i < 20000; i++) spawn_entity(ENT_TREE, (float)GetRandomValue(20, MAP_SIZE - 20), (float)GetRandomValue(20, MAP_SIZE - 20));
-    for (int i = 0; i < 20000; i++)  spawn_entity(ENT_BOT, (float)GetRandomValue(20, MAP_SIZE - 20), (float)GetRandomValue(20, MAP_SIZE - 20));
+    for (int i = 0; i < 3000; i++) spawn_entity(ENT_TREE, (float)GetRandomValue(20, MAP_SIZE - 20), (float)GetRandomValue(20, MAP_SIZE - 20));
+    for (int i = 0; i < 500; i++)  spawn_entity(ENT_BOT, (float)GetRandomValue(20, MAP_SIZE - 20), (float)GetRandomValue(20, MAP_SIZE - 20));
 
     camera.zoom = 1.0f;
 
